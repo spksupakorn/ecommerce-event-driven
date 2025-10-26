@@ -19,11 +19,12 @@ type Consumer struct {
 	inventoryService OrderProcessor
 }
 
-type OrderCreatedEvent struct {
-	OrderID   string `json:"order_id"`
-	ItemID    string `json:"item_id"`
-	Quantity  int    `json:"quantity"`
-	UserEmail string `json:"user_email"`
+type PaymentProcessedEvent struct {
+	OrderID   string  `json:"order_id"`
+	ItemID    string  `json:"item_id"`
+	Quantity  int     `json:"quantity"`
+	UserEmail string  `json:"user_email"`
+	Amount    float64 `json:"amount"`
 }
 
 func NewConsumer(rabbitMQURL string, inventoryService OrderProcessor) (*Consumer, error) {
@@ -38,9 +39,9 @@ func NewConsumer(rabbitMQURL string, inventoryService OrderProcessor) (*Consumer
 		return nil, err
 	}
 
-	// Declare exchange
+	// Declare payments exchange
 	err = channel.ExchangeDeclare(
-		"orders",
+		"payments",
 		"topic",
 		true,
 		false,
@@ -56,7 +57,7 @@ func NewConsumer(rabbitMQURL string, inventoryService OrderProcessor) (*Consumer
 
 	// Declare queue
 	queue, err := channel.QueueDeclare(
-		"order.created.queue",
+		"payment.successful.queue",
 		true,
 		false,
 		false,
@@ -72,8 +73,8 @@ func NewConsumer(rabbitMQURL string, inventoryService OrderProcessor) (*Consumer
 	// Bind queue to exchange
 	err = channel.QueueBind(
 		queue.Name,
-		"order.created",
-		"orders",
+		"payment.successful",
+		"payments",
 		false,
 		nil,
 	)
@@ -94,7 +95,7 @@ func NewConsumer(rabbitMQURL string, inventoryService OrderProcessor) (*Consumer
 
 func (c *Consumer) Start() error {
 	msgs, err := c.channel.Consume(
-		"order.created.queue",
+		"payment.successful.queue",
 		"",
 		false, // manual ack
 		false,
@@ -108,16 +109,16 @@ func (c *Consumer) Start() error {
 
 	go func() {
 		for msg := range msgs {
-			var event OrderCreatedEvent
+			var event PaymentProcessedEvent
 			if err := json.Unmarshal(msg.Body, &event); err != nil {
 				log.Printf("Failed to unmarshal message: %v", err)
 				msg.Nack(false, false) // Don't requeue
 				continue
 			}
 
-			log.Printf("Received order.created event: %+v", event)
+			log.Printf("Received payment.successful event: %+v", event)
 
-			// Process the order
+			// Process the order (reserve inventory)
 			c.inventoryService.ProcessOrder(event.OrderID, event.ItemID, event.Quantity, event.UserEmail)
 
 			// Acknowledge the message

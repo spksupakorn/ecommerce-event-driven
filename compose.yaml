@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # PostgreSQL for Order Service
@@ -46,7 +46,7 @@ services:
     image: rabbitmq:3.12-management-alpine
     container_name: rabbitmq
     ports:
-      - "5672:5672"   # AMQP port
+      - "5672:5672" # AMQP port
       - "15672:15672" # Management UI
     environment:
       RABBITMQ_DEFAULT_USER: admin
@@ -76,6 +76,21 @@ services:
     depends_on:
       order-db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+
+  # Payment Service
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    environment:
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+    depends_on:
       rabbitmq:
         condition: service_healthy
     networks:

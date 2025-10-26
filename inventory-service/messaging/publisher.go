@@ -74,6 +74,58 @@ func (p *Publisher) PublishInventoryProcessed(event interface{}) error {
 	return nil
 }
 
+func (p *Publisher) PublishInventoryFailed(event interface{}) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	err = p.channel.Publish(
+		"inventory",
+		"inventory.failed",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Published inventory.failed event: %s", string(body))
+	return nil
+}
+
+func (p *Publisher) PublishInventorySuccessful(event interface{}) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	err = p.channel.Publish(
+		"inventory",
+		"inventory.successful",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Published inventory.successful event: %s", string(body))
+	return nil
+}
+
 func (p *Publisher) Close() {
 	if p.channel != nil {
 		p.channel.Close()

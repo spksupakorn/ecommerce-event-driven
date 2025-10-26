@@ -15,6 +15,7 @@ import (
 	"github.com/spksupakorn/ecommerce-event-driven/order-service/handlers"
 	"github.com/spksupakorn/ecommerce-event-driven/order-service/messaging"
 	"github.com/spksupakorn/ecommerce-event-driven/order-service/repository"
+	"github.com/spksupakorn/ecommerce-event-driven/order-service/services"
 )
 
 func main() {
@@ -38,6 +39,20 @@ func main() {
 	// Initialize repository and handler
 	orderRepo := repository.NewOrderRepository(db)
 	orderHandler := handlers.NewOrderHandler(orderRepo, publisher)
+
+	// Initialize order service
+	orderService := services.NewOrderService(orderRepo)
+
+	// Initialize and start consumer for inventory.failed events
+	consumer, err := messaging.NewConsumer(cfg.RabbitMQURL, orderService)
+	if err != nil {
+		log.Fatalf("Failed to initialize RabbitMQ consumer: %v", err)
+	}
+	defer consumer.Close()
+
+	if err := consumer.Start(); err != nil {
+		log.Fatalf("Failed to start consumer: %v", err)
+	}
 
 	// Setup Gin router
 	router := setupRouter(orderHandler)

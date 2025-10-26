@@ -27,7 +27,8 @@ func (s *InventoryService) ProcessOrder(orderID, itemID string, quantity int, us
 	err := s.repo.ReserveStock(itemID, quantity)
 	if err != nil {
 		log.Printf("Failed to reserve stock: %v", err)
-		s.publishInventoryEvent(orderID, itemID, quantity, userEmail, "FAILED", err.Error())
+		// Publish inventory.failed event for out of stock
+		s.publishInventoryFailedEvent(orderID, itemID, quantity, userEmail, err.Error())
 		return
 	}
 
@@ -35,12 +36,13 @@ func (s *InventoryService) ProcessOrder(orderID, itemID string, quantity int, us
 	err = s.repo.DeductStock(itemID, quantity)
 	if err != nil {
 		log.Printf("Failed to deduct stock: %v", err)
-		s.publishInventoryEvent(orderID, itemID, quantity, userEmail, "FAILED", err.Error())
+		// Publish inventory.failed event
+		s.publishInventoryFailedEvent(orderID, itemID, quantity, userEmail, err.Error())
 		return
 	}
 
 	log.Printf("Successfully processed inventory for order: %s", orderID)
-	s.publishInventoryEvent(orderID, itemID, quantity, userEmail, "SUCCESS", "Stock reserved and deducted successfully")
+	s.publishInventorySuccessfulEvent(orderID, itemID, quantity, userEmail, "Stock reserved and deducted successfully")
 }
 
 func (s *InventoryService) publishInventoryEvent(orderID, itemID string, quantity int, userEmail, status, message string) {
@@ -56,5 +58,35 @@ func (s *InventoryService) publishInventoryEvent(orderID, itemID string, quantit
 
 	if err := s.publisher.PublishInventoryProcessed(event); err != nil {
 		log.Printf("Failed to publish inventory.processed event: %v", err)
+	}
+}
+
+func (s *InventoryService) publishInventorySuccessfulEvent(orderID, itemID string, quantity int, userEmail, message string) {
+	event := map[string]interface{}{
+		"order_id":     orderID,
+		"item_id":      itemID,
+		"quantity":     quantity,
+		"user_email":   userEmail,
+		"message":      message,
+		"processed_at": time.Now(),
+	}
+
+	if err := s.publisher.PublishInventorySuccessful(event); err != nil {
+		log.Printf("Failed to publish inventory.successful event: %v", err)
+	}
+}
+
+func (s *InventoryService) publishInventoryFailedEvent(orderID, itemID string, quantity int, userEmail, reason string) {
+	event := map[string]interface{}{
+		"order_id":   orderID,
+		"item_id":    itemID,
+		"quantity":   quantity,
+		"user_email": userEmail,
+		"reason":     reason,
+		"failed_at":  time.Now(),
+	}
+
+	if err := s.publisher.PublishInventoryFailed(event); err != nil {
+		log.Printf("Failed to publish inventory.failed event: %v", err)
 	}
 }
